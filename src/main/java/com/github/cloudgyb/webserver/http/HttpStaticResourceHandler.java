@@ -10,6 +10,8 @@ import org.slf4j.LoggerFactory;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.nio.charset.Charset;
 
 /**
@@ -33,19 +35,27 @@ public class HttpStaticResourceHandler {
 
     public void handle(HttpRequest request, HttpResponse response) {
         HttpMethod method = request.getMethod();
-        String uri = request.getUri();
+        String uriStr = request.getUri();
+        URI uri;
+        try {
+            uri = new URI(uriStr);
+        } catch (URISyntaxException e) {
+            resp404(response);
+            return;
+        }
+        String path = uri.getPath();
         if (method.equals(HttpMethod.GET) || method.equals(HttpMethod.HEAD)) {
-            serveStaticResource(uri, method, response);
+            serveStaticResource(path, method, response);
         } else {
             resp405(method, response);
         }
 
     }
 
-    private void serveStaticResource(String uri, HttpMethod method, HttpResponse response) {
-        if (uri.equals("/"))
-            uri = "/index.html";
-        File file = new File(webRoot, uri);
+    private void serveStaticResource(String path, HttpMethod method, HttpResponse response) {
+        if (path.equals("/"))
+            path = "/index.html";
+        File file = new File(webRoot, path);
         boolean exists = file.exists();
         if (!exists) {
             resp404(response);
