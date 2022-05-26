@@ -3,6 +3,9 @@ package com.github.cloudgyb.webserver.http;
 import com.github.cloudgyb.webserver.http.request.HttpRequest;
 import com.github.cloudgyb.webserver.http.response.HttpResponse;
 import com.github.cloudgyb.webserver.util.FileUtils;
+import io.netty.handler.codec.DateFormatter;
+import io.netty.handler.codec.http.HttpHeaderNames;
+import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.HttpMethod;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -13,6 +16,7 @@ import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.charset.Charset;
+import java.util.Date;
 
 /**
  * http静态资源处理器
@@ -45,14 +49,15 @@ public class HttpStaticResourceHandler {
         }
         String path = uri.getPath();
         if (method.equals(HttpMethod.GET) || method.equals(HttpMethod.HEAD)) {
-            serveStaticResource(path, method, response);
+            HttpHeaders headers = request.getAllHeaders();
+            serveStaticResource(path, method, headers, response);
         } else {
             resp405(method, response);
         }
 
     }
 
-    private void serveStaticResource(String path, HttpMethod method, HttpResponse response) {
+    private void serveStaticResource(String path, HttpMethod method, HttpHeaders headers, HttpResponse response) {
         if (path.equals("/"))
             path = "/index.html";
         File file = new File(webRoot, path);
@@ -65,17 +70,23 @@ public class HttpStaticResourceHandler {
             resp403(response);
             return;
         }
-        respFile(response, file, method.equals(HttpMethod.HEAD));
+        respFile(response, file, method.equals(HttpMethod.HEAD), headers);
     }
 
 
-    public void respFile(HttpResponse response, File file, boolean isHeadMethod) {
+    public void respFile(HttpResponse response, File file, boolean isHeadMethod, HttpHeaders headers) {
         boolean canRead = file.canRead();
         if (!canRead) {
             resp403(response);
             return;
         }
+
+        if (!isCacheExpired(headers, file)) {
+            resp304(response);
+            return;
+        }
         String fileName = file.getName();
+        long fileLastModified = file.lastModified();
         try (FileInputStream fis = new FileInputStream(file)) {
             byte[] bytes = new byte[0];
             if (!isHeadMethod)
@@ -84,6 +95,8 @@ public class HttpStaticResourceHandler {
             response.setContentLength(file.length());
             MediaType mediaType = MediaType.getMediaType(FileUtils.getSuffix(fileName));
             response.setContentType(mediaType.value);
+            response.addHeader(HttpHeaderNames.LAST_MODIFIED.toString(), new Date(fileLastModified));
+            response.addHeader(HttpHeaderNames.ETAG.toString(), generateFileEtag(file));
             if (!isHeadMethod)
                 response.write(bytes);
             response.end();
@@ -91,6 +104,38 @@ public class HttpStaticResourceHandler {
             logger.error("", e);
             resp500(response);
         }
+    }
+
+    private boolean isCacheExpired(HttpHeaders headers, File file) {
+        String ifModifiedSince = headers.get(HttpHeaderNames.IF_MODIFIED_SINCE);
+        if (ifModifiedSince == null)
+            return true;
+        Date date = DateFormatter.parseHttpDate(ifModifiedSince);
+        if (date == null)
+            return true;
+        String etag = headers.get(HttpHeaderNames.IF_NONE_MATCH);
+        if (etag == null)
+            return true;
+        return isCacheExpired(date, etag, file);
+    }
+
+
+    private boolean isCacheExpired(Date date, String etag, File file) {
+        long ifModifiedSince = file.lastModified() / 1000;
+        long fileModifiedTime = date.getTime() / 1000;
+        String newEtag = generateFileEtag(file);
+        return ifModifiedSince < fileModifiedTime || !newEtag.equals(etag);
+    }
+
+    private String generateFileEtag(File file) {
+        long l = file.lastModified();
+        long length = file.length();
+        return "W/\"" + l + "/" + length + "\"";
+    }
+
+    private void resp304(HttpResponse response) {
+        response.setStatusCode(304);
+        response.end();
     }
 
     private void resp403(HttpResponse response) {
