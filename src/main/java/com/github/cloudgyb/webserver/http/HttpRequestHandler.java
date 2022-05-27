@@ -9,6 +9,8 @@ import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.handler.codec.http.FullHttpRequest;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * 请求处理器,委派给{@link HttpStaticResourceHandler}处理请求
@@ -18,6 +20,7 @@ import io.netty.handler.codec.http.FullHttpRequest;
  */
 @ChannelHandler.Sharable
 public class HttpRequestHandler extends ChannelInboundHandlerAdapter {
+    private final Logger logger = LoggerFactory.getLogger(getClass());
     private final HttpStaticResourceHandler httpStaticResourceHandler;
 
     public HttpRequestHandler(WebServerConfig config) {
@@ -36,5 +39,11 @@ public class HttpRequestHandler extends ChannelInboundHandlerAdapter {
         } else {
             super.channelRead(ctx, msg);
         }
+    }
+
+    @Override
+    public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) {
+        logger.error("", cause);
+        ctx.close();
     }
 }

@@ -3,6 +3,7 @@ package com.github.cloudgyb.webserver.http;
 import com.github.cloudgyb.webserver.http.request.HttpRequest;
 import com.github.cloudgyb.webserver.http.response.HttpResponse;
 import com.github.cloudgyb.webserver.util.FileUtils;
+import io.netty.channel.DefaultFileRegion;
 import io.netty.handler.codec.DateFormatter;
 import io.netty.handler.codec.http.HttpHeaderNames;
 import io.netty.handler.codec.http.HttpHeaders;
@@ -11,12 +12,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
-import java.io.FileInputStream;
-import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.charset.Charset;
 import java.util.Date;
+import java.util.List;
 
 /**
  * http静态资源处理器
@@ -26,6 +26,7 @@ import java.util.Date;
 public class HttpStaticResourceHandler {
     private final Logger logger = LoggerFactory.getLogger(getClass());
     private final String webRoot;
+    private final RangeHeaderDecode rangeHeaderDecode;
 
     public HttpStaticResourceHandler(String webRoot) {
         this.webRoot = webRoot;
@@ -35,6 +36,7 @@ public class HttpStaticResourceHandler {
             if (mkdir)
                 logger.info("WEBROOT目录已创建！");
         }
+        rangeHeaderDecode = new RangeHeaderDecode();
     }
 
     public void handle(HttpRequest request, HttpResponse response) {
@@ -52,6 +54,7 @@ public class HttpStaticResourceHandler {
             HttpHeaders headers = request.getAllHeaders();
             serveStaticResource(path, method, headers, response);
         } else {
+            logger.warn("不支持的请求方法：" + method);
             resp405(method, response);
         }
 
@@ -73,37 +76,61 @@ public class HttpStaticResourceHandler {
         respFile(response, file, method.equals(HttpMethod.HEAD), headers);
     }
 
-
     public void respFile(HttpResponse response, File file, boolean isHeadMethod, HttpHeaders headers) {
         boolean canRead = file.canRead();
         if (!canRead) {
             resp403(response);
             return;
         }
-
         if (!isCacheExpired(headers, file)) {
             resp304(response);
             return;
         }
         String fileName = file.getName();
-        long fileLastModified = file.lastModified();
-        try (FileInputStream fis = new FileInputStream(file)) {
-            byte[] bytes = new byte[0];
-            if (!isHeadMethod)
-                bytes = fis.readAllBytes();
-            response.setStatusCode(200);
-            response.setContentLength(file.length());
-            MediaType mediaType = MediaType.getMediaType(FileUtils.getSuffix(fileName));
-            response.setContentType(mediaType.value);
-            response.addHeader(HttpHeaderNames.LAST_MODIFIED.toString(), new Date(fileLastModified));
-            response.addHeader(HttpHeaderNames.ETAG.toString(), generateFileEtag(file));
-            if (!isHeadMethod)
-                response.write(bytes);
-            response.end();
-        } catch (IOException e) {
-            logger.error("", e);
-            resp500(response);
+        long fileSize = file.length();
+        //处理范围请求
+        String rangeHeaderValue = headers.get(HttpHeaderNames.RANGE);
+        if (rangeHeaderValue != null) {
+            RangeHeader decodedRangeHeader = rangeHeaderDecode.decode(rangeHeaderValue);
+            if (decodedRangeHeader == null) {
+                resp416(response);
+                return;
+            }
+            respFileRange(file, decodedRangeHeader, response, isHeadMethod);
+            return;
         }
+        long fileLastModified = file.lastModified();
+        DefaultFileRegion fileRegion = new DefaultFileRegion(file, 0, fileSize);
+        response.setStatusCode(200);
+        MediaType mediaType = MediaType.getMediaType(FileUtils.getSuffix(fileName));
+        response.setContentType(mediaType.value);
+        response.setContentLength(file.length());
+        response.addHeader(HttpHeaderNames.LAST_MODIFIED.toString(), new Date(fileLastModified));
+        response.addHeader(HttpHeaderNames.ETAG.toString(), generateFileEtag(file));
+        if (!isHeadMethod) {
+            response.write(fileRegion);
+        }
+        response.end();
+    }
+
+    private void respFileRange(File file, RangeHeader rangeHeader, HttpResponse response, boolean isHeadMethod) {
+        long fileTotalSize = file.length();
+        List<Long[]> rangeStartEnds = rangeHeader.getRangeStartEnds();
+        Long[] rangeStartEnd = rangeStartEnds.get(0);
+        long start = rangeStartEnd[0];
+        long end = rangeStartEnd[1] == null ? 1024 * 1024L : rangeStartEnd[1];
+        end = end > file.length() ? file.length() - 1 : end;
+        long length = (end - start + 1);
+        DefaultFileRegion fileRegion = new DefaultFileRegion(file, start, length);
+        response.addHeader(HttpHeaderNames.ACCEPT_RANGES.toString(), "bytes");
+        response.addHeader(HttpHeaderNames.CONTENT_RANGE.toString(), "bytes " + start + "-" + end + "/" + fileTotalSize);
+        response.setStatusCode(206);
+        response.setContentLength(length);
+        response.setContentType(MediaType.getMediaType(FileUtils.getSuffix(file.getName())).value);
+        if (!isHeadMethod) {
+            response.write(fileRegion);
+        }
+        response.end();
     }
 
     private boolean isCacheExpired(HttpHeaders headers, File file) {
@@ -168,10 +195,10 @@ public class HttpStaticResourceHandler {
         response.end();
     }
 
-    private void resp500(HttpResponse response) {
-        String respContent = "系统内部错误500";
+    private void resp416(HttpResponse response) {
+        String respContent = "非法的Range请求头！";
         byte[] bytes = respContent.getBytes(Charset.defaultCharset());
-        response.setStatusCode(500);
+        response.setStatusCode(416);
         response.setContentLength(bytes.length);
         response.setContentType("text/html; charset=utf-8");
         response.write(bytes);

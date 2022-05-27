@@ -19,6 +19,7 @@ public class HttpResponseWrapper implements HttpResponse {
     private final HttpHeaders headers;
     private HttpResponseStatus status = HttpResponseStatus.OK;
     private ByteBuf body;
+    private FileRegion fileRegion = null;
 
     public HttpResponseWrapper(ChannelHandlerContext context) {
         this.context = context;
@@ -50,14 +51,23 @@ public class HttpResponseWrapper implements HttpResponse {
 
     @Override
     public void write(FileRegion file) {
-        this.context.write(file);
+        if (file == null)
+            throw new IllegalArgumentException("file");
+        this.fileRegion = file;
     }
 
     public void end() {
-        FullHttpResponse response = new DefaultFullHttpResponse(HttpVersion.HTTP_1_1,
-                this.status, this.body,
-                this.headers, new DefaultHttpHeaders());
-        this.context.writeAndFlush(response);
+        DefaultHttpResponse response = new DefaultHttpResponse(HttpVersion.HTTP_1_1,
+                this.status, this.headers);
+        this.context.write(response);
+        if (body.readableBytes() > 0) {
+            this.context.write(body);
+        }
+        if (this.fileRegion != null) {
+            this.context.write(fileRegion);
+        }
+        DefaultLastHttpContent defaultLastHttpContent = new DefaultLastHttpContent();
+        this.context.writeAndFlush(defaultLastHttpContent);
     }
 
 }
