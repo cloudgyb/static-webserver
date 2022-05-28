@@ -17,7 +17,7 @@ mkdir %LIB_DIR%
 mkdir %LOG_DIR%
 mkdir %WEB_ROOT%
 
-copy /Y bin\startup.bat %BIN_DIR%
+copy /Y bin\startup.* %BIN_DIR%
 
 copy /Y target\*.jar %LIB_DIR%
 move /Y %LIB_DIR%\static-webserver-*.jar %LIB_DIR%\webserver.jar
