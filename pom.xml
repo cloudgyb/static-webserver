@@ -74,7 +74,7 @@
                     <archive>
                         <manifest>
                             <addClasspath>true</addClasspath>
-                            <classpathPrefix>lib/</classpathPrefix>
+                            <classpathPrefix>./</classpathPrefix>
                             <mainClass>com.github.cloudgyb.webserver.App</mainClass>
                         </manifest>
                     </archive>
