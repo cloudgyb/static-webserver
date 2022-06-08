@@ -3,10 +3,17 @@ package com.github.cloudgyb.webserver.http.response;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelHandlerContext;
-import io.netty.channel.FileRegion;
+import io.netty.channel.DefaultFileRegion;
 import io.netty.handler.codec.http.*;
 import io.netty.handler.codec.http.cookie.Cookie;
 import io.netty.handler.codec.http.cookie.ServerCookieEncoder;
+import io.netty.handler.ssl.SslHandler;
+import io.netty.handler.stream.ChunkedNioFile;
+
+import java.io.File;
+import java.io.IOException;
+import java.nio.channels.FileChannel;
+import java.nio.file.StandardOpenOption;
 
 /**
  * HttpResponse 包装器
@@ -19,7 +26,9 @@ public class HttpResponseWrapper implements HttpResponse {
     private final HttpHeaders headers;
     private HttpResponseStatus status = HttpResponseStatus.OK;
     private ByteBuf body;
-    private FileRegion fileRegion = null;
+    private File file = null;
+    private long fileStart = 0;
+    private long fileLength;
 
     public HttpResponseWrapper(ChannelHandlerContext context) {
         this.context = context;
@@ -50,10 +59,16 @@ public class HttpResponseWrapper implements HttpResponse {
     }
 
     @Override
-    public void write(FileRegion file) {
+    public void write(File file, long start, long length) {
         if (file == null)
             throw new IllegalArgumentException("file");
-        this.fileRegion = file;
+        if (start < 0 || start > file.length() - 1)
+            throw new IllegalArgumentException("start");
+        if (length <= 0 || length > file.length())
+            throw new IllegalArgumentException("length");
+        this.file = file;
+        this.fileStart = start;
+        this.fileLength = length;
     }
 
     public void end() {
@@ -63,11 +78,22 @@ public class HttpResponseWrapper implements HttpResponse {
         if (body.readableBytes() > 0) {
             this.context.write(body);
         }
-        if (this.fileRegion != null) {
-            this.context.write(fileRegion);
+        if (this.file != null) {
+            if (this.context.pipeline().get(SslHandler.class) != null) {
+                try {
+                    ChunkedNioFile chunkedNioFile = new ChunkedNioFile(
+                            FileChannel.open(file.toPath(), StandardOpenOption.READ),
+                            fileStart, fileLength, 8192);
+                    this.context.write(chunkedNioFile);
+                } catch (IOException ignore) {
+                }
+            } else {
+                DefaultFileRegion fileRegion = new DefaultFileRegion(file, fileStart, fileLength);
+                this.context.write(fileRegion);
+            }
         }
-        DefaultLastHttpContent defaultLastHttpContent = new DefaultLastHttpContent();
-        this.context.writeAndFlush(defaultLastHttpContent);
+        //DefaultLastHttpContent defaultLastHttpContent = new DefaultLastHttpContent();
+        this.context.writeAndFlush(LastHttpContent.EMPTY_LAST_CONTENT);
     }
 
 }

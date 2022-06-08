@@ -3,7 +3,6 @@ package com.github.cloudgyb.webserver.http;
 import com.github.cloudgyb.webserver.http.request.HttpRequest;
 import com.github.cloudgyb.webserver.http.response.HttpResponse;
 import com.github.cloudgyb.webserver.util.FileUtils;
-import io.netty.channel.DefaultFileRegion;
 import io.netty.handler.codec.DateFormatter;
 import io.netty.handler.codec.http.HttpHeaderNames;
 import io.netty.handler.codec.http.HttpHeaders;
@@ -100,15 +99,14 @@ public class HttpStaticResourceHandler {
             return;
         }
         long fileLastModified = file.lastModified();
-        DefaultFileRegion fileRegion = new DefaultFileRegion(file, 0, fileSize);
         response.setStatusCode(200);
         MediaType mediaType = MediaType.getMediaType(FileUtils.getSuffix(fileName));
         response.setContentType(mediaType.value);
-        response.setContentLength(file.length());
+        response.setContentLength(fileSize);
         response.addHeader(HttpHeaderNames.LAST_MODIFIED.toString(), new Date(fileLastModified));
         response.addHeader(HttpHeaderNames.ETAG.toString(), generateFileEtag(file));
         if (!isHeadMethod) {
-            response.write(fileRegion);
+            response.write(file);
         }
         response.end();
     }
@@ -121,14 +119,13 @@ public class HttpStaticResourceHandler {
         long end = rangeStartEnd[1] == null ? 1024 * 1024L : rangeStartEnd[1];
         end = end > file.length() ? file.length() - 1 : end;
         long length = (end - start + 1);
-        DefaultFileRegion fileRegion = new DefaultFileRegion(file, start, length);
         response.addHeader(HttpHeaderNames.ACCEPT_RANGES.toString(), "bytes");
         response.addHeader(HttpHeaderNames.CONTENT_RANGE.toString(), "bytes " + start + "-" + end + "/" + fileTotalSize);
         response.setStatusCode(206);
         response.setContentLength(length);
         response.setContentType(MediaType.getMediaType(FileUtils.getSuffix(file.getName())).value);
         if (!isHeadMethod) {
-            response.write(fileRegion);
+            response.write(file, start, length);
         }
         response.end();
     }
