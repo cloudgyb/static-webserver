@@ -20,6 +20,8 @@ public class CommandLineConfigReader implements ConfigReader {
     private final static String PARMA_BIND_HOST = "server-host";
     private final static String PARMA_BIND_PORT = "server-port";
     private final static String PARMA_WEB_ROOT = "web-root";
+    private final static String PARMA_SERVER_SSL_KEY = "server-ssl-key";
+    private final static String PARMA_SERVER_SSL_CERT = "server-ssl-cert";
     private final String[] args;
     private final Options options;
 
@@ -38,6 +40,14 @@ public class CommandLineConfigReader implements ConfigReader {
                 .longOpt(PARMA_WEB_ROOT)
                 .hasArg()
                 .argName("filepath").build());
+        this.options.addOption(Option.builder()
+                .longOpt(PARMA_SERVER_SSL_KEY)
+                .hasArg()
+                .argName("filepath").build());
+        this.options.addOption(Option.builder()
+                .longOpt(PARMA_SERVER_SSL_CERT)
+                .hasArg()
+                .argName("filepath").build());
     }
 
     @Override
@@ -53,10 +63,14 @@ public class CommandLineConfigReader implements ConfigReader {
         String bindHost = cli.getOptionValue(PARMA_BIND_HOST);
         String bindPort = cli.getOptionValue(PARMA_BIND_PORT);
         String webRoot = cli.getOptionValue(PARMA_WEB_ROOT);
+        String sslKey = cli.getOptionValue(PARMA_SERVER_SSL_KEY);
+        String sslCert = cli.getOptionValue(PARMA_SERVER_SSL_CERT);
         HashMap<String, String> map = new HashMap<>();
         map.put(WebServerConfig.CONFIG_HOST, bindHost);
         map.put(WebServerConfig.CONFIG_PORT, bindPort);
         map.put(WebServerConfig.CONFIG_WEB_ROOT, webRoot);
+        map.put(WebServerConfig.CONFIG_SSL_KEY, sslKey);
+        map.put(WebServerConfig.CONFIG_SSL_CERT, sslCert);
         return validateConfig(map);
     }
 }

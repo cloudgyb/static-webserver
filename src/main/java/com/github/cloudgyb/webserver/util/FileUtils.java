@@ -5,7 +5,7 @@ package com.github.cloudgyb.webserver.util;
  *
  * @author cloudgyb
  */
-public class FileUtils {
+public class FileUtils extends org.apache.commons.io.FileUtils {
     public static String getSuffix(String filename) {
         int i = filename.lastIndexOf('.');
         if (i == -1)

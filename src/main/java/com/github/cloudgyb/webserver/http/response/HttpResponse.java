@@ -1,10 +1,10 @@
 package com.github.cloudgyb.webserver.http.response;
 
-import io.netty.channel.FileRegion;
 import io.netty.handler.codec.http.HttpHeaderNames;
 import io.netty.handler.codec.http.HttpResponseStatus;
 import io.netty.handler.codec.http.cookie.Cookie;
 
+import java.io.File;
 import java.nio.charset.Charset;
 
 /**
@@ -25,7 +25,11 @@ public interface HttpResponse {
 
     void write(byte[] content);
 
-    void write(FileRegion file);
+    default void write(File file) {
+        write(file, 0, file.length());
+    }
+
+    void write(File file, long start, long length);
 
     default void setContentType(String type) {
         addHeader(HttpHeaderNames.CONTENT_TYPE.toString(), type);

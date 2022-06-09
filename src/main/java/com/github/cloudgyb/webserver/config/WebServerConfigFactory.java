@@ -2,6 +2,7 @@ package com.github.cloudgyb.webserver.config;
 
 import org.apache.commons.lang.StringUtils;
 
+import java.io.File;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -33,6 +34,12 @@ public class WebServerConfigFactory {
         String webRoot = (String) mergeMap.get(WebServerConfig.CONFIG_WEB_ROOT);
         if (StringUtils.isNotBlank(webRoot))
             webServerConfig.setWebRoot(webRoot);
+        File sslKeyFile = (File) mergeMap.get(WebServerConfig.CONFIG_SSL_KEY);
+        File sslCertFile = (File) mergeMap.get(WebServerConfig.CONFIG_SSL_CERT);
+        if (sslKeyFile != null && sslCertFile != null) {
+            SSLConfig sslConfig = new SSLConfig(sslKeyFile, sslCertFile);
+            webServerConfig.setSslConfig(sslConfig);
+        }
         return webServerConfig;
     }
 }
