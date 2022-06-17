@@ -20,6 +20,7 @@ public interface ConfigReader {
         String webRoot = origin.get(WebServerConfig.CONFIG_WEB_ROOT);
         String sslKey = origin.get(WebServerConfig.CONFIG_SSL_KEY);
         String sslCert = origin.get(WebServerConfig.CONFIG_SSL_CERT);
+        String h2 = origin.get(WebServerConfig.CONFIG_H2);
         HashMap<String, Object> map = new HashMap<>();
         if (StringUtils.isNotBlank(serverHost))
             map.put(WebServerConfig.CONFIG_HOST, serverHost);
@@ -55,6 +56,9 @@ public interface ConfigReader {
             throw new WebServerConfigException("The param " + WebServerConfig.CONFIG_SSL_KEY + " is not configured");
         } else if (sslKey != null) {
             throw new WebServerConfigException("The param " + WebServerConfig.CONFIG_SSL_CERT + " is not configured");
+        }
+        if ("true".equals(h2)) {
+            map.put(WebServerConfig.CONFIG_H2, true);
         }
         return map;
     }

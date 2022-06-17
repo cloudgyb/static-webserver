@@ -11,6 +11,7 @@ public class WebServerConfig {
     public static final String CONFIG_SSL_KEY = "server.ssl.key";
     public static final String CONFIG_SSL_CERT = "server.ssl.cert";
     public static final String CONFIG_WEB_ROOT = "web.root";
+    public static final String CONFIG_H2 = "h2";
     public static final String CONFIG_TCP_BACKLOG = "tcp.backlog";
     private String host = "localhost";
     private int port = 80;
@@ -18,6 +19,8 @@ public class WebServerConfig {
     private String webRoot = "WEBROOT";
 
     private SSLConfig sslConfig;
+
+    private boolean enableHttp2;
 
     public String getHost() {
         return host;
@@ -58,5 +61,13 @@ public class WebServerConfig {
     public void setSslConfig(SSLConfig sslConfig) {
         sslConfig.validate();
         this.sslConfig = sslConfig;
+    }
+
+    public void enableHttp2(boolean enableHttp2) {
+        this.enableHttp2 = enableHttp2;
+    }
+
+    public boolean enableHttp2() {
+        return this.enableHttp2;
     }
 }
