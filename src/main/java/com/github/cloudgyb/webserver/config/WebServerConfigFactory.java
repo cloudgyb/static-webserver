@@ -39,6 +39,18 @@ public class WebServerConfigFactory {
         if (sslKeyFile != null && sslCertFile != null) {
             SSLConfig sslConfig = new SSLConfig(sslKeyFile, sslCertFile);
             webServerConfig.setSslConfig(sslConfig);
+            if (webServerConfig.getPort() == 0) {
+                webServerConfig.setPort(443);
+            }
+        }
+        if (webServerConfig.getPort() == 0) {
+            webServerConfig.setPort(80);
+        }
+        final Object isH2 = mergeMap.get(WebServerConfig.CONFIG_H2);
+        boolean h2 = (isH2 != null && (boolean) isH2);
+        webServerConfig.enableHttp2(h2);
+        if (webServerConfig.enableHttp2() && webServerConfig.getSslConfig() == null) {
+            throw new WebServerConfigException("h2依赖于ssl，要想使用h2协议必须配置ssl相关选项！");
         }
         return webServerConfig;
     }

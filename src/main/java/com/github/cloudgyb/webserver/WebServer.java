@@ -2,9 +2,11 @@ package com.github.cloudgyb.webserver;
 
 import com.github.cloudgyb.webserver.config.SSLConfig;
 import com.github.cloudgyb.webserver.config.WebServerConfig;
+import com.github.cloudgyb.webserver.http.Http2RequestHandler;
 import com.github.cloudgyb.webserver.http.HttpRequestHandler;
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.channel.ChannelFuture;
+import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInitializer;
 import io.netty.channel.ChannelOption;
 import io.netty.channel.nio.NioEventLoopGroup;
@@ -12,6 +14,7 @@ import io.netty.channel.socket.nio.NioServerSocketChannel;
 import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.handler.codec.http.HttpObjectAggregator;
 import io.netty.handler.codec.http.HttpServerCodec;
+import io.netty.handler.codec.http2.Http2FrameCodecBuilder;
 import io.netty.handler.ssl.*;
 import io.netty.handler.stream.ChunkedWriteHandler;
 import org.slf4j.Logger;
@@ -35,13 +38,22 @@ public class WebServer {
         HttpRequestHandler httpRequestHandler = new HttpRequestHandler(config);
         SSLConfig sslConfig = config.getSslConfig();
         boolean hasSSLConfig = false;
+        boolean enableHttp2 = config.enableHttp2();
         SslContext sslContext = null;
         if (sslConfig != null) {
             try {
-                sslContext = SslContextBuilder
+                SslContextBuilder sslContextBuilder = SslContextBuilder
                         .forServer(sslConfig.getCert(), sslConfig.getPrivateKey())
-                        .clientAuth(ClientAuth.NONE)
-                        .build();
+                        .clientAuth(ClientAuth.NONE);
+                if (enableHttp2) {
+                    ApplicationProtocolConfig apn = new ApplicationProtocolConfig(
+                            ApplicationProtocolConfig.Protocol.ALPN,
+                            ApplicationProtocolConfig.SelectorFailureBehavior.NO_ADVERTISE,
+                            ApplicationProtocolConfig.SelectedListenerFailureBehavior.CHOOSE_MY_LAST_PROTOCOL,
+                            ApplicationProtocolNames.HTTP_2);
+                    sslContextBuilder.applicationProtocolConfig(apn);
+                }
+                sslContext = sslContextBuilder.build();
                 hasSSLConfig = true;
             } catch (SSLException e) {
                 throw new RuntimeException(e);
@@ -63,11 +75,17 @@ public class WebServer {
                                 channel.pipeline()
                                         .addLast("ssl", sslHandler);
                             }
-                            channel.pipeline()
-                                    .addLast("httpRequestDecoder", new HttpServerCodec())
-                                    .addLast("httpAgg", new HttpObjectAggregator(512))
-                                    .addLast("chunked", new ChunkedWriteHandler())
-                                    .addLast("httpRequestHandler", httpRequestHandler);
+                            if (enableHttp2) {
+                                channel.pipeline()
+                                        .addLast(getServerAPNHandler(config));
+                            } else {
+                                channel.pipeline()
+                                        .addLast("httpRequestDecoder", new HttpServerCodec())
+                                        .addLast("httpAgg", new HttpObjectAggregator(512))
+                                        .addLast("chunked", new ChunkedWriteHandler())
+                                        .addLast("httpRequestHandler", httpRequestHandler);
+                            }
+
                         }
                     })
                     .bind(config.getHost(), config.getPort());
@@ -80,5 +98,21 @@ public class WebServer {
             workerGroup.shutdownGracefully();
             boosGroup.shutdownGracefully();
         }
+    }
+
+    public static ApplicationProtocolNegotiationHandler getServerAPNHandler(WebServerConfig config) {
+        return new ApplicationProtocolNegotiationHandler(ApplicationProtocolNames.HTTP_2) {
+            @Override
+            protected void configurePipeline(ChannelHandlerContext ctx, String protocol) {
+                if (ApplicationProtocolNames.HTTP_2.equals(protocol)) {
+                    ctx.pipeline().addLast(
+                            Http2FrameCodecBuilder.forServer().build(),
+                            new ChunkedWriteHandler(),
+                            new Http2RequestHandler(config));
+                    return;
+                }
+                throw new IllegalStateException("Protocol: " + protocol + " not supported");
+            }
+        };
     }
 }
