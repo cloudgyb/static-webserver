@@ -28,6 +28,8 @@ public class Http2RequestWrapper implements HttpRequest {
     private void extractHeaders() {
         for (Map.Entry<CharSequence, CharSequence> next : headersFrame.headers()) {
             CharSequence key = next.getKey();
+            if (key.charAt(0) == ':')
+                continue;
             CharSequence value = next.getValue();
             this.headers.add(key, value);
         }

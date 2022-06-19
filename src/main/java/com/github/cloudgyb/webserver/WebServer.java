@@ -107,6 +107,7 @@ public class WebServer {
                 if (ApplicationProtocolNames.HTTP_2.equals(protocol)) {
                     ctx.pipeline().addLast(
                             Http2FrameCodecBuilder.forServer().build(),
+                            new ChunkedWriteHandler(),
                             new Http2RequestHandler(config));
                     return;
                 }

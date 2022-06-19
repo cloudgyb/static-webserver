@@ -3,16 +3,13 @@ package com.github.cloudgyb.webserver.http;
 import com.github.cloudgyb.webserver.config.WebServerConfig;
 import com.github.cloudgyb.webserver.http.request.Http2RequestWrapper;
 import com.github.cloudgyb.webserver.http.response.Http2ResponseWrapper;
-import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
-import io.netty.handler.codec.http.HttpHeaderNames;
-import io.netty.handler.codec.http.HttpResponseStatus;
-import io.netty.handler.codec.http2.*;
+import io.netty.handler.codec.http2.Http2ChannelDuplexHandler;
+import io.netty.handler.codec.http2.Http2Headers;
+import io.netty.handler.codec.http2.Http2HeadersFrame;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import java.nio.charset.StandardCharsets;
 
 /**
  * htt2请求处理器
@@ -36,22 +33,6 @@ public class Http2RequestHandler extends Http2ChannelDuplexHandler {
             Http2Headers headers = http2HeadersFrame.headers();
             headers.path();
             if (http2HeadersFrame.isEndStream()) {
-                String respBody = "Hello H2!";
-                DefaultHttp2Headers resHeaders = new DefaultHttp2Headers();
-                resHeaders.status(HttpResponseStatus.OK.codeAsText());
-                resHeaders.add(HttpHeaderNames.CONTENT_TYPE, "text/html");
-                resHeaders.add(HttpHeaderNames.CONTENT_LENGTH, respBody.length() + "");
-                ctx.write(new DefaultHttp2HeadersFrame(resHeaders).stream(http2HeadersFrame.stream()));
-                ctx.writeAndFlush(
-                        new DefaultHttp2DataFrame(
-                                Unpooled.copiedBuffer(respBody.getBytes(StandardCharsets.UTF_8))
-                        ).stream(http2HeadersFrame.stream())
-                );
-                ctx.writeAndFlush(
-                        new DefaultHttp2DataFrame(
-                                true
-                        ).stream(http2HeadersFrame.stream())
-                );
                 httpStaticResourceHandler.handle(
                         new Http2RequestWrapper(http2HeadersFrame),
                         new Http2ResponseWrapper(ctx, http2HeadersFrame.stream())
@@ -60,5 +41,11 @@ public class Http2RequestHandler extends Http2ChannelDuplexHandler {
         } else {
             super.channelRead(ctx, msg);
         }
+    }
+
+    @Override
+    public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) {
+        logger.error("", cause);
+        ctx.close();
     }
 }
