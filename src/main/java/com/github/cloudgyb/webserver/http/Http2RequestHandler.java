@@ -6,7 +6,6 @@ import com.github.cloudgyb.webserver.http.response.Http2ResponseWrapper;
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.http2.Http2ChannelDuplexHandler;
-import io.netty.handler.codec.http2.Http2Headers;
 import io.netty.handler.codec.http2.Http2HeadersFrame;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -30,8 +29,6 @@ public class Http2RequestHandler extends Http2ChannelDuplexHandler {
     public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
         if (msg instanceof Http2HeadersFrame) {
             Http2HeadersFrame http2HeadersFrame = (Http2HeadersFrame) msg;
-            Http2Headers headers = http2HeadersFrame.headers();
-            headers.path();
             if (http2HeadersFrame.isEndStream()) {
                 httpStaticResourceHandler.handle(
                         new Http2RequestWrapper(http2HeadersFrame),
