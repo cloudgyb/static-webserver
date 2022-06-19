@@ -14,7 +14,7 @@ public class WebServerConfig {
     public static final String CONFIG_H2 = "h2";
     public static final String CONFIG_TCP_BACKLOG = "tcp.backlog";
     private String host = "localhost";
-    private int port = 80;
+    private int port;
     private int tcpBacklog = 10;
     private String webRoot = "WEBROOT";
 
